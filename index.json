@@ -22,7 +22,10 @@
       "description": "Returns current date/time and sets alarms. Shared time source for other plugins.",
       "author": "SF12P",
       "version": "1.0",
-      "tags": [],
+      "tags": [
+        "utility",
+        "time"
+      ],
       "file": "datetime_info.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/datetime_info.py",
       "requires": []
