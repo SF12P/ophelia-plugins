@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'plugins/**.py'
+  workflow_dispatch:  # Enables the "Run workflow" button on GitHub
 
 jobs:
   update-index:
