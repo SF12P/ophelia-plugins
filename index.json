@@ -47,7 +47,10 @@
       "description": "Save and retrieve quick notes",
       "author": "SF12P",
       "version": "1.0",
-      "tags": [],
+      "tags": [
+        "utility",
+        "productivity"
+      ],
       "file": "notes.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/notes.py",
       "requires": []
