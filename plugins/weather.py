@@ -9,6 +9,10 @@ TRIGGERS    = ["weather in", "weather for", "weather today", "check the weather"
 # Removed bare "rain","snow","sunny","cloudy" — too broad, fire on non-weather sentences
 DESCRIPTION = "Gets current weather for any location using wttr.in (free, no API key)"
 MANUAL_ONLY = False
+AUTHOR    = "SF12P"
+TAGS      = ['utility', 'weather']
+REQUIRES  = ['requests']
+
 
 def run(query: str, context: dict) -> str:
     text = context["user_input"]
