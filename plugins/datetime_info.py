@@ -21,6 +21,10 @@ import datetime
 NAME        = "datetime_info"
 DESCRIPTION = "Returns current date/time and sets alarms. Shared time source for other plugins."
 MANUAL_ONLY = False
+AUTHOR    = "SF12P"
+TAGS      = ['utility', 'time']
+REQUIRES  = []
+
 
 TRIGGERS = [
     "what time is it", "what's the time", "current time", "what is the time",
