@@ -8,7 +8,10 @@
       "description": "Evaluates math expressions and calculations",
       "author": "SF12P",
       "version": "1.0",
-      "tags": [],
+      "tags": [
+        "utility",
+        "math"
+      ],
       "file": "calculator.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/calculator.py",
       "requires": []
