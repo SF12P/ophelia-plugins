@@ -1,0 +1,72 @@
+{
+  "version": "1.0",
+  "updated": "2026-06-02",
+  "plugins": [
+    {
+      "name": "calculator",
+      "display_name": "Calculator",
+      "description": "Evaluates math expressions and calculations",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [],
+      "file": "calculator.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/calculator.py",
+      "requires": []
+    },
+    {
+      "name": "datetime_info",
+      "display_name": "Datetime Info",
+      "description": "Returns current date/time and sets alarms. Shared time source for other plugins.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [],
+      "file": "datetime_info.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/datetime_info.py",
+      "requires": []
+    },
+    {
+      "name": "image_gen",
+      "display_name": "Image Gen",
+      "description": "Local AI image generation using Stable Diffusion. Fully self-contained.",
+      "author": "SF12P",
+      "version": "1.1",
+      "tags": [],
+      "file": "image_gen.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/image_gen.py",
+      "requires": []
+    },
+    {
+      "name": "notes",
+      "display_name": "Notes",
+      "description": "Save and retrieve quick notes",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [],
+      "file": "notes.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/notes.py",
+      "requires": []
+    },
+    {
+      "name": "voice_setup",
+      "display_name": "Voice Setup",
+      "description": "Sets up Chatterbox-Turbo voice for Ophelia",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [],
+      "file": "voice_setup.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/voice_setup.py",
+      "requires": []
+    },
+    {
+      "name": "weather",
+      "display_name": "Weather",
+      "description": "Gets current weather for any location using wttr.in (free, no API key)",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [],
+      "file": "weather.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/weather.py",
+      "requires": []
+    }
+  ]
+}
