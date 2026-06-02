@@ -8,6 +8,10 @@ TRIGGERS    = ["calculate", "how much is", "what does", "equals", "solve", "eval
 # "what is" removed — too broad, fires on non-math questions
 DESCRIPTION = "Evaluates math expressions and calculations"
 MANUAL_ONLY = False
+AUTHOR    = "SF12P"
+TAGS      = ['utility', 'math']
+REQUIRES  = []
+
 
 def run(query: str, context: dict) -> str:
     text = context["user_input"]
