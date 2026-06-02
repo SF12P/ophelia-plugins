@@ -61,10 +61,18 @@
       "description": "Sets up Chatterbox-Turbo voice for Ophelia",
       "author": "SF12P",
       "version": "1.0",
-      "tags": [],
+      "tags": [
+        "voice",
+        "setup"
+      ],
       "file": "voice_setup.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/voice_setup.py",
-      "requires": []
+      "requires": [
+        "torch",
+        "torchaudio",
+        "soundfile",
+        "flask"
+      ]
     },
     {
       "name": "weather",
