@@ -22,6 +22,10 @@ TRIGGERS    = ["set up voice", "install voice", "voice setup", "enable voice",
                "setup voice", "configure voice"]
 DESCRIPTION = "Sets up Chatterbox-Turbo voice for Ophelia"
 MANUAL_ONLY = False
+AUTHOR    = "SF12P"
+TAGS      = ['voice', 'setup']
+REQUIRES  = ['torch', 'torchaudio', 'soundfile', 'flask']
+
 
 # Where the chatterbox env lives relative to trm_base's parent
 CHATTERBOX_ENV = "chatterbox_env"
