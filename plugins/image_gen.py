@@ -44,6 +44,32 @@ TRIGGERS = [
 
 DEFAULT_MODEL = "OFA-Sys/small-stable-diffusion-v0"
 
+# Settings exposed to the Plugin Manager UI
+# Format: {pref_key: {label, type (bool/str/int/choice), default, choices (if choice)}}
+SETTINGS = {
+    "image_gen_popup": {
+        "label":   "Show images in popup window",
+        "type":    "bool",
+        "default": False,
+    },
+    "image_gen_steps": {
+        "label":   "Inference steps (higher = better quality)",
+        "type":    "int",
+        "default": 20,
+    },
+    "image_gen_size": {
+        "label":   "Output size (pixels)",
+        "type":    "choice",
+        "choices": ["512", "768"],
+        "default": "512",
+    },
+    "image_gen_model": {
+        "label":   "Model (HuggingFace ID)",
+        "type":    "str",
+        "default": DEFAULT_MODEL,
+    },
+}
+
 # Commands exposed to the help system
 # Format: {command: description}
 COMMANDS = {
