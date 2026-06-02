@@ -72,10 +72,15 @@
       "description": "Gets current weather for any location using wttr.in (free, no API key)",
       "author": "SF12P",
       "version": "1.0",
-      "tags": [],
+      "tags": [
+        "utility",
+        "weather"
+      ],
       "file": "weather.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/weather.py",
-      "requires": []
+      "requires": [
+        "requests"
+      ]
     }
   ]
 }
