@@ -1,4 +1,4 @@
-"""Weather plugin using wttr.in — free, no API key needed."""
+"""Weather plugin using wttr.in."""
 import requests, re
 
 NAME        = "weather"
