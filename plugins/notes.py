@@ -7,6 +7,10 @@ TRIGGERS    = ["make a note", "note that", "remember that", "save this",
                "add a note", "show my notes", "list notes", "read my notes"]
 DESCRIPTION = "Save and retrieve quick notes"
 MANUAL_ONLY = False
+AUTHOR    = "SF12P"
+TAGS      = ['utility', 'productivity']
+REQUIRES  = []
+
 
 COMMANDS = {
     "make a note <text>":  "Save a quick note",
