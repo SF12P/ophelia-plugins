@@ -3,6 +3,24 @@
   "updated": "2026-06-04",
   "plugins": [
     {
+      "name": "background_media",
+      "display_name": "Background Media",
+      "description": "Set a static image or animated video as Ophelia's background.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [
+        "appearance",
+        "customization",
+        "media"
+      ],
+      "file": "background_media.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/background_media.py",
+      "requires": [
+        "Pillow",
+        "opencv-python"
+      ]
+    },
+    {
       "name": "calculator",
       "display_name": "Calculator",
       "description": "Evaluates math expressions and calculations",
