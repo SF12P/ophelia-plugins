@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated": "2026-06-02",
+  "updated": "2026-06-04",
   "plugins": [
     {
       "name": "calculator",
@@ -31,6 +31,21 @@
       "requires": []
     },
     {
+      "name": "file_search",
+      "display_name": "File Search",
+      "description": "Search your entire PC for files and folders. Opens File Explorer with result highlighted.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [
+        "utility",
+        "files",
+        "search"
+      ],
+      "file": "file_search.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/file_search.py",
+      "requires": []
+    },
+    {
       "name": "image_gen",
       "display_name": "Image Gen",
       "description": "Local AI image generation using Stable Diffusion. Fully self-contained.",
@@ -39,6 +54,21 @@
       "tags": [],
       "file": "image_gen.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/image_gen.py",
+      "requires": []
+    },
+    {
+      "name": "mood_tracker",
+      "display_name": "Mood Tracker",
+      "description": "Track your mood over time. Ophelia notices patterns and checks in on you.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [
+        "wellness",
+        "mood",
+        "tracking"
+      ],
+      "file": "mood_tracker.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/mood_tracker.py",
       "requires": []
     },
     {
