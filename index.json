@@ -35,6 +35,21 @@
       "requires": []
     },
     {
+      "name": "chat_search",
+      "display_name": "Chat Search",
+      "description": "Search through your conversation history across all chats.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [
+        "utility",
+        "search",
+        "chat"
+      ],
+      "file": "chat_search.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/chat_search.py",
+      "requires": []
+    },
+    {
       "name": "datetime_info",
       "display_name": "Datetime Info",
       "description": "Returns current date/time and sets alarms. Shared time source for other plugins.",
@@ -46,6 +61,21 @@
       ],
       "file": "datetime_info.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/datetime_info.py",
+      "requires": []
+    },
+    {
+      "name": "export_chat",
+      "display_name": "Export Chat",
+      "description": "Export your chats as .txt or .pdf files.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [
+        "utility",
+        "export",
+        "chat"
+      ],
+      "file": "export_chat.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/export_chat.py",
       "requires": []
     },
     {
