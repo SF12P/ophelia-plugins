@@ -49,7 +49,7 @@ SETTINGS = {
     "opacity":      {"type": "int",    "default": 40,    "min": 5,  "max": 95,
                      "label": "Opacity (%)"},
     "mode":         {"type": "choice", "default": "chat",
-                     "options": ["chat", "window"],
+                     "choices": ["chat", "window"],
                      "label": "Background mode"},
     "fps_limit":    {"type": "int",    "default": 24,    "min": 5,  "max": 60,
                      "label": "Video FPS limit"},
