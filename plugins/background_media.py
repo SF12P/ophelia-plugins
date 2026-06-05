@@ -100,25 +100,32 @@ def _get_chat_widget(root):
 
 
 def _make_canvas(root, target_widget, mode):
-    """Create a canvas overlay behind the target widget."""
+    """
+    Create a background canvas behind the target widget.
+    Uses the chat widget's own parent as the canvas parent so
+    tkinter stacking order works correctly within the same container.
+    """
     import tkinter as tk
-    canvas = tk.Canvas(root, highlightthickness=0, bd=0)
     if mode == "chat":
-        # Place canvas exactly behind the chat widget
+        # Parent the canvas to the same container as the chat widget
+        parent = target_widget.master
+        canvas = tk.Canvas(parent, highlightthickness=0, bd=0)
         def _position(*args):
             try:
                 x = target_widget.winfo_x()
                 y = target_widget.winfo_y()
                 w = target_widget.winfo_width()
                 h = target_widget.winfo_height()
-                canvas.place(x=x, y=y, width=w, height=h)
-                canvas.lower(target_widget)
+                if w > 10 and h > 10:
+                    canvas.place(x=x, y=y, width=w, height=h)
+                    canvas.lower(target_widget)  # now works — same parent
             except Exception:
                 pass
         target_widget.bind("<Configure>", _position)
-        root.after(100, _position)
+        root.after(200, _position)
     else:
-        # Full window
+        # Full window — parent to root
+        canvas = tk.Canvas(root, highlightthickness=0, bd=0)
         canvas.place(x=0, y=0, relwidth=1, relheight=1)
         canvas.lower()
     return canvas
