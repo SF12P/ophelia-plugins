@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.0"
+VERSION     = "1.1"
 DESCRIPTION = "Set a static image or animated video as Ophelia's background."
 MANUAL_ONLY = False
 AUTHOR      = "SF12P"
