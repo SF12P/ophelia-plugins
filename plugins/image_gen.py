@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 
 NAME        = "image_gen"
-VERSION     = "1.1"
+VERSION     = "1.2"
 DESCRIPTION = "Local AI image generation using Stable Diffusion. Fully self-contained."
 MANUAL_ONLY = False
 
