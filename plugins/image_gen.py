@@ -42,10 +42,17 @@ TRIGGERS = [
     "image settings", "image clear cache",
 ]
 
-DEFAULT_MODEL = "OFA-Sys/small-stable-diffusion-v0"
+DEFAULT_MODEL = "stabilityai/sdxl-turbo"
 
 # Settings exposed to the Plugin Manager UI
 # Format: {pref_key: {label, type (bool/str/int/choice), default, choices (if choice)}}
+# Available models with descriptions
+MODEL_OPTIONS = {
+    "stabilityai/sdxl-turbo":          "SDXL Turbo (fast, great quality, recommended)",
+    "Lykon/dreamshaper-xl-turbo":       "Dreamshaper XL (artistic, vivid, great for characters)",
+    "OFA-Sys/small-stable-diffusion-v0":"Small SD (lightweight, weaker quality)",
+}
+
 SETTINGS = {
     "image_gen_popup": {
         "label":   "Show images in popup window",
@@ -64,8 +71,13 @@ SETTINGS = {
         "default": "512",
     },
     "image_gen_model": {
-        "label":   "Model (HuggingFace ID)",
-        "type":    "str",
+        "label":   "Image model",
+        "type":    "choice",
+        "choices": [
+            "stabilityai/sdxl-turbo",
+            "Lykon/dreamshaper-xl-turbo",
+            "OFA-Sys/small-stable-diffusion-v0",
+        ],
         "default": DEFAULT_MODEL,
     },
 }
@@ -230,7 +242,9 @@ def _download_model(model_id: str, on_status) -> bool:
             f"Downloading image model: {model_id}\n"
             f"This only happens once (~1.7GB). Please wait..."
         )
-        pipe = StableDiffusionPipeline.from_pretrained(
+        model_id = prefs.get("model", DEFAULT_MODEL)
+        PipeClass = _get_pipeline_class(model_id)
+        pipe = PipeClass.from_pretrained(
             model_id,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             safety_checker=None,
@@ -242,6 +256,18 @@ def _download_model(model_id: str, on_status) -> bool:
     except Exception as e:
         on_status(f"Download failed: {e}")
         return False
+
+
+def _get_pipeline_class(model_id: str):
+    """Return appropriate pipeline class for the model."""
+    try:
+        from diffusers import AutoPipelineForText2Image, StableDiffusionPipeline
+        if "xl" in model_id.lower() or "sdxl" in model_id.lower():
+            return AutoPipelineForText2Image
+        return StableDiffusionPipeline
+    except Exception:
+        from diffusers import StableDiffusionPipeline
+        return StableDiffusionPipeline
 
 
 def _load_pipeline(prefs: dict):
@@ -266,11 +292,13 @@ def _load_pipeline(prefs: dict):
 
 def _generate(pipe, prompt: str, prefs: dict):
     size = prefs["size"]
+    model_id = prefs.get("model", DEFAULT_MODEL)
+    is_turbo = "turbo" in model_id.lower() or "sdxl-turbo" in model_id.lower()
     return pipe(
         prompt,
-        num_inference_steps=prefs["steps"],
+        num_inference_steps=prefs["steps"] if not is_turbo else min(prefs["steps"], 4),
         height=size, width=size,
-        guidance_scale=7.5,
+        guidance_scale=0.0 if is_turbo else 7.5,
     ).images[0]
 
 
@@ -426,6 +454,16 @@ def run(query: str, context: dict) -> str:
                     return
 
             _chat_status(f"Generating: {prompt[:60]}...")
+            # Show waiting message in chat
+            try:
+                import tkinter as tk
+                root = tk._default_root
+                if root:
+                    def _show_wait():
+                        pass  # handled by _asy in run()
+                    root.after(0, _show_wait)
+            except Exception:
+                pass
             pipe  = _load_pipeline(prefs)
             image = _generate(pipe, prompt, prefs)
             path  = _save_image(image)
