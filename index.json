@@ -50,6 +50,21 @@
       "requires": []
     },
     {
+      "name": "conversation_insights",
+      "display_name": "Conversation Insights",
+      "description": "Generates summaries and stats about your conversation history with Ophelia.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [
+        "utility",
+        "memory",
+        "insights"
+      ],
+      "file": "conversation_insights.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/conversation_insights.py",
+      "requires": []
+    },
+    {
       "name": "datetime_info",
       "display_name": "Datetime Info",
       "description": "Returns current date/time and sets alarms. Shared time source for other plugins.",
@@ -102,6 +117,21 @@
       "tags": [],
       "file": "image_gen.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/image_gen.py",
+      "requires": []
+    },
+    {
+      "name": "message_search",
+      "display_name": "Message Search",
+      "description": "Search within the current chat for any phrase or keyword.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [
+        "utility",
+        "search",
+        "chat"
+      ],
+      "file": "message_search.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/message_search.py",
       "requires": []
     },
     {
