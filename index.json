@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated": "2026-06-05",
+  "updated": "2026-06-06",
   "plugins": [
     {
       "name": "background_media",
@@ -132,6 +132,23 @@
       "file": "notes.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/notes.py",
       "requires": []
+    },
+    {
+      "name": "system_monitor",
+      "display_name": "System Monitor",
+      "description": "Always-on-top live system stats overlay \u2014 CPU, RAM, GPU.",
+      "author": "SF12P",
+      "version": "1.0",
+      "tags": [
+        "utility",
+        "system",
+        "overlay"
+      ],
+      "file": "system_monitor.py",
+      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/system_monitor.py",
+      "requires": [
+        "psutil"
+      ]
     },
     {
       "name": "voice_setup",
