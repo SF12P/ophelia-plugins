@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.1"
+VERSION     = "1.2"
 DESCRIPTION = "Set a static image or animated video as Ophelia's background."
 MANUAL_ONLY = False
 AUTHOR      = "SF12P"
@@ -102,29 +102,43 @@ def _get_chat_widget(root):
 def _make_canvas(root, target_widget, mode):
     """
     Create a background canvas behind the target widget.
-    Uses the chat widget's own parent as the canvas parent so
-    tkinter stacking order works correctly within the same container.
+    ScrolledText nests Text inside Frame inside ScrolledText —
+    we need to go to the ScrolledText's own master (the chat container)
+    and position the canvas there using absolute coords.
     """
     import tkinter as tk
     if mode == "chat":
-        # Parent the canvas to the same container as the chat widget
-        parent = target_widget.master
+        # ScrolledText hierarchy: co(Frame) > ScrolledText > Frame > Text
+        # target_widget is the Text — go up to the chat container (co frame)
+        try:
+            # Walk up until we find a widget with a meaningful size
+            parent = target_widget.master  # inner Frame of ScrolledText
+            parent = parent.master         # ScrolledText widget
+            parent = parent.master         # co frame (chat container)
+        except Exception:
+            parent = target_widget.master
+
         canvas = tk.Canvas(parent, highlightthickness=0, bd=0)
+
         def _position(*args):
             try:
-                x = target_widget.winfo_x()
-                y = target_widget.winfo_y()
-                w = target_widget.winfo_width()
-                h = target_widget.winfo_height()
+                # Position canvas to cover the ScrolledText (parent.master's child)
+                # Find the ScrolledText widget within parent
+                sw = target_widget.master.master  # ScrolledText
+                x = sw.winfo_x()
+                y = sw.winfo_y()
+                w = sw.winfo_width()
+                h = sw.winfo_height()
                 if w > 10 and h > 10:
                     canvas.place(x=x, y=y, width=w, height=h)
-                    canvas.lower(target_widget)  # now works — same parent
+                    canvas.lower(sw)
             except Exception:
                 pass
-        target_widget.bind("<Configure>", _position)
-        root.after(200, _position)
+
+        target_widget.master.master.bind("<Configure>", _position)
+        root.after(300, _position)
+        root.after(800, _position)  # second pass after full render
     else:
-        # Full window — parent to root
         canvas = tk.Canvas(root, highlightthickness=0, bd=0)
         canvas.place(x=0, y=0, relwidth=1, relheight=1)
         canvas.lower()
@@ -170,6 +184,12 @@ def _show_static(path: str):
             _bg_state["_canvas"] = canvas
             _bg_state["_root"]   = root
             _bg_state["_target"] = chat
+            # Match text widget bg so canvas shows through
+            try:
+                chat.config(bg="#0a0a0f")
+                chat.master.config(bg="#0a0a0f")
+            except Exception:
+                pass
 
             def _draw(*args):
                 try:
