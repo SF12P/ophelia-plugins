@@ -16,7 +16,7 @@ import tkinter as tk
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.4"
+VERSION     = "1.5"
 DESCRIPTION = "Set a static image or animated GIF as Ophelia's background."
 MANUAL_ONLY = False
 AUTHOR      = "SF12P"
@@ -139,7 +139,7 @@ def _clear_background():
 
 
 def _apply_background(path: str, opacity: int, blur: bool):
-    """Create and place the background label behind the chat widget."""
+    """Create and place the background label inside the chat Text widget."""
     root = _state["root"]
     if not root:
         return False
@@ -164,24 +164,17 @@ def _apply_background(path: str, opacity: int, blur: bool):
 
         _clear_background()
 
-        # Create label in the SAME parent as the chat widget
-        # place() it at chat's position so it sits exactly behind it
-        parent = chat.master
-        lbl = tk.Label(parent, borderwidth=0, highlightthickness=0)
+        # Place the label INSIDE the chat Text widget using place()
+        # This is the only reliable way — the label sits inside the text
+        # widget's own coordinate space, always visible, never clipped
+        lbl = tk.Label(chat, borderwidth=0, highlightthickness=0)
         lbl.image = frames[0]
         lbl.config(image=frames[0])
+        lbl.place(x=0, y=0, width=w, height=h)
 
-        # Place at same position as chat widget
-        x = chat.winfo_x()
-        y = chat.winfo_y()
-        lbl.place(x=x, y=y, width=w, height=h)
-
-        # Stack: lift all existing siblings above the background label
-        # Never call lbl.lower(chat) — fails when parent hierarchy mismatches
+        # Lower inside the Text widget so text renders on top
         try:
-            for sibling in parent.winfo_children():
-                if sibling is not lbl:
-                    sibling.lift()
+            lbl.lower()
         except Exception:
             pass
 
@@ -196,10 +189,7 @@ def _apply_background(path: str, opacity: int, blur: bool):
                     return
                 nw = chat.winfo_width()
                 nh = chat.winfo_height()
-                nx = chat.winfo_x()
-                ny = chat.winfo_y()
                 if nw > 10 and nh > 10:
-                    # Reload image at new size
                     new_frames = _load_image(path, nw, nh, opacity, blur)
                     if new_frames:
                         _state["label"].config(image=new_frames[0])
@@ -207,12 +197,9 @@ def _apply_background(path: str, opacity: int, blur: bool):
                         _state["image_ref"]   = new_frames[0]
                         if len(new_frames) > 1:
                             _state["gif_frames"] = new_frames
-                    _state["label"].place(x=nx, y=ny, width=nw, height=nh)
-                    # Re-lift siblings after resize
+                    _state["label"].place(x=0, y=0, width=nw, height=nh)
                     try:
-                        for sibling in parent.winfo_children():
-                            if sibling is not _state["label"]:
-                                sibling.lift()
+                        _state["label"].lower()
                     except Exception:
                         pass
             except Exception:
