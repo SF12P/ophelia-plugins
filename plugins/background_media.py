@@ -1,428 +1,332 @@
 """
 plugins/background_media.py — Ophelia Background Media Plugin
 ==============================================================
-Set a static image or animated video as the background
-behind the chat area or the entire window.
+Sets a static image or animated GIF as Ophelia's chat background.
+Uses a Label widget placed directly behind the chat area — reliable
+across all widget hierarchies.
 
 Commands:
-  set background <path>     — set image/video as chat background
-  background off            — remove background
-  background opacity <0-100>— adjust background transparency
-  background mode chat      — show behind chat only (default)
-  background mode window    — show behind entire window
-  background settings       — show current settings
-
-Supports: jpg, png, gif, mp4, avi, mkv, webm
-Requires: Pillow (images), opencv-python (video)
+  set background <path>     — set image background
+  clear background          — remove background
+  background opacity <0-100> — adjust opacity
 """
 
-import os
 import threading
-import time
+import tkinter as tk
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.2"
-DESCRIPTION = "Set a static image or animated video as Ophelia's background."
+VERSION     = "1.3"
+DESCRIPTION = "Set a static image or animated GIF as Ophelia's background."
 MANUAL_ONLY = False
 AUTHOR      = "SF12P"
-TAGS        = ["appearance", "customization", "media"]
-REQUIRES    = ["Pillow", "opencv-python"]
+TAGS        = ["appearance", "background", "media"]
+REQUIRES    = ["Pillow"]
 
 TRIGGERS = [
-    "set background", "background image", "background video",
-    "live wallpaper", "set wallpaper", "background off",
-    "remove background", "background opacity", "background mode",
-    "background settings",
+    "set background", "clear background", "remove background",
+    "background image", "background opacity", "change background",
 ]
 
 COMMANDS = {
-    "set background <path>":      "Set an image or video as background",
-    "background off":             "Remove the background",
-    "background opacity <0-100>": "Set background transparency",
-    "background mode chat":       "Show background behind chat only (default)",
-    "background mode window":     "Show background behind entire window",
-    "background settings":        "Show current background settings",
+    "set background <path>":      "Set an image as chat background",
+    "clear background":           "Remove the background image",
+    "background opacity <0-100>": "Adjust background opacity",
 }
 
 SETTINGS = {
-    "opacity":      {"type": "int",    "default": 40,    "min": 5,  "max": 95,
-                     "label": "Opacity (%)"},
-    "mode":         {"type": "choice", "default": "chat",
-                     "choices": ["chat", "window"],
-                     "label": "Background mode"},
-    "fps_limit":    {"type": "int",    "default": 24,    "min": 5,  "max": 60,
-                     "label": "Video FPS limit"},
-    "blur":         {"type": "bool",   "default": False,
-                     "label": "Blur background"},
-    "blur_radius":  {"type": "int",    "default": 8,     "min": 2,  "max": 30,
-                     "label": "Blur radius"},
+    "opacity": {
+        "label":   "Opacity (%)",
+        "type":    "int",
+        "default": 40,
+        "min":     5,
+        "max":     100,
+    },
+    "blur": {
+        "label":   "Blur background",
+        "type":    "bool",
+        "default": False,
+    },
 }
 
-# Module-level state
-_bg_state = {
-    "active":    False,
-    "path":      "",
-    "mode":      "chat",       # "chat" or "window"
-    "opacity":   40,           # 0-100
-    "fps_limit": 24,
-    "blur":      False,
-    "blur_radius": 8,
-    "_stop":     False,
-    "_thread":   None,
-    "_canvas":   None,
-    "_image_id": None,
-    "_root":     None,
-    "_target":   None,         # the widget to put canvas behind
+# ── State ──────────────────────────────────────────────────────────────────────
+_state = {
+    "label":      None,   # tk.Label holding the background image
+    "image_ref":  None,   # PhotoImage reference (prevent GC)
+    "gif_frames": [],     # GIF animation frames
+    "gif_job":    None,   # after() job id for GIF animation
+    "image_path": "",
+    "opacity":    40,
+    "root":       None,
+    "chat_widget":None,
 }
 
 
-def _get_root():
-    try:
-        import tkinter as tk
-        return tk._default_root
-    except Exception:
-        return None
+# ── Image helpers ─────────────────────────────────────────────────────────────
 
+def _load_image(path: str, w: int, h: int, opacity: int, blur: bool):
+    """Load and process image — returns PhotoImage or list of frames for GIF."""
+    from PIL import Image, ImageTk, ImageFilter, ImageEnhance
+    img = Image.open(path)
 
-def _get_chat_widget(root):
-    """Find the main chat Text widget."""
-    import tkinter as tk
-    def _find(w):
-        if isinstance(w, tk.Text) and w.winfo_width() > 200:
-            return w
-        for c in w.winfo_children():
-            found = _find(c)
-            if found:
-                return found
-        return None
-    return _find(root)
+    is_gif = getattr(img, "is_animated", False) or \
+             path.lower().endswith(".gif")
 
-
-def _make_canvas(root, target_widget, mode):
-    """
-    Create a background canvas behind the target widget.
-    ScrolledText nests Text inside Frame inside ScrolledText —
-    we need to go to the ScrolledText's own master (the chat container)
-    and position the canvas there using absolute coords.
-    """
-    import tkinter as tk
-    if mode == "chat":
-        # ScrolledText hierarchy: co(Frame) > ScrolledText > Frame > Text
-        # target_widget is the Text — go up to the chat container (co frame)
-        try:
-            # Walk up until we find a widget with a meaningful size
-            parent = target_widget.master  # inner Frame of ScrolledText
-            parent = parent.master         # ScrolledText widget
-            parent = parent.master         # co frame (chat container)
-        except Exception:
-            parent = target_widget.master
-
-        canvas = tk.Canvas(parent, highlightthickness=0, bd=0)
-
-        def _position(*args):
-            try:
-                # Position canvas to cover the ScrolledText (parent.master's child)
-                # Find the ScrolledText widget within parent
-                sw = target_widget.master.master  # ScrolledText
-                x = sw.winfo_x()
-                y = sw.winfo_y()
-                w = sw.winfo_width()
-                h = sw.winfo_height()
-                if w > 10 and h > 10:
-                    canvas.place(x=x, y=y, width=w, height=h)
-                    canvas.lower(sw)
-            except Exception:
-                pass
-
-        target_widget.master.master.bind("<Configure>", _position)
-        root.after(300, _position)
-        root.after(800, _position)  # second pass after full render
-    else:
-        canvas = tk.Canvas(root, highlightthickness=0, bd=0)
-        canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        canvas.lower()
-    return canvas
-
-
-def _load_image(path: str, width: int, height: int, opacity: int,
-                blur: bool, blur_radius: int):
-    """Load and process a static image for display."""
-    try:
-        from PIL import Image, ImageTk, ImageFilter
-        img = Image.open(path).convert("RGBA")
-        img = img.resize((width, height), Image.LANCZOS)
+    def _process_frame(frame: Image.Image) -> tk.PhotoImage:
+        frame = frame.convert("RGBA").resize((w, h), Image.LANCZOS)
         if blur:
-            img = img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
-        # Apply opacity
-        r, g, b, a = img.split()
-        a = a.point(lambda p: int(p * opacity / 100))
-        img.putalpha(a)
-        return ImageTk.PhotoImage(img)
-    except Exception as e:
-        return None
+            frame = frame.filter(ImageFilter.GaussianBlur(radius=4))
+        # Apply opacity by blending with black
+        if opacity < 100:
+            alpha = int(opacity * 2.55)
+            overlay = Image.new("RGBA", frame.size, (0, 0, 0, 255 - alpha))
+            frame = Image.alpha_composite(frame, overlay)
+        return ImageTk.PhotoImage(frame.convert("RGB"))
 
-
-def _show_static(path: str):
-    """Show a static image background."""
-    import tkinter as tk
-    root = _get_root()
-    if not root:
-        return
-
-    def _do():
+    if is_gif:
+        frames = []
         try:
-            chat = _get_chat_widget(root)
-            if not chat:
-                return
+            while True:
+                frames.append(_process_frame(img.copy()))
+                img.seek(img.tell() + 1)
+        except EOFError:
+            pass
+        return frames
+    else:
+        return [_process_frame(img)]
 
-            # Remove existing canvas
-            _remove_canvas()
 
-            mode   = _bg_state["mode"]
-            canvas = _make_canvas(root, chat, mode)
-            _bg_state["_canvas"] = canvas
-            _bg_state["_root"]   = root
-            _bg_state["_target"] = chat
-            # Match text widget bg so canvas shows through
-            try:
-                chat.config(bg="#0a0a0f")
-                chat.master.config(bg="#0a0a0f")
-            except Exception:
-                pass
+def _find_chat_container(root: tk.Tk):
+    """
+    Walk widget tree to find the main chat Text widget and its container.
+    Returns (text_widget, container_frame) or (None, None).
+    """
+    def _walk(widget, depth=0):
+        if depth > 8:
+            return None, None
+        if isinstance(widget, tk.Text):
+            w = widget.winfo_width()
+            h = widget.winfo_height()
+            if w > 300 and h > 200:
+                return widget, widget.master
+        for child in widget.winfo_children():
+            result = _walk(child, depth + 1)
+            if result[0] is not None:
+                return result
+        return None, None
+    return _walk(root)
 
-            def _draw(*args):
-                try:
-                    w = canvas.winfo_width()  or root.winfo_width()
-                    h = canvas.winfo_height() or root.winfo_height()
-                    if w < 10 or h < 10:
-                        root.after(200, _draw)
-                        return
-                    photo = _load_image(path, w, h,
-                        _bg_state["opacity"],
-                        _bg_state["blur"],
-                        _bg_state["blur_radius"])
-                    if photo:
-                        canvas.delete("all")
-                        canvas.create_image(0, 0, anchor=tk.NW, image=photo)
-                        canvas._photo_ref = photo  # prevent GC
-                except Exception:
-                    pass
 
-            canvas.bind("<Configure>", _draw)
-            root.after(150, _draw)
-            _bg_state["active"] = True
+# ── Background management ─────────────────────────────────────────────────────
 
+def _clear_background():
+    """Remove existing background label and stop GIF animation."""
+    if _state["gif_job"] and _state["root"]:
+        try:
+            _state["root"].after_cancel(_state["gif_job"])
         except Exception:
             pass
+    _state["gif_job"]    = None
+    _state["gif_frames"] = []
 
-    root.after(0, _do)
-
-
-def _show_video(path: str):
-    """Show an animated video background."""
-    import tkinter as tk
-    root = _get_root()
-    if not root:
-        return
-
-    def _do():
+    if _state["label"]:
         try:
-            import cv2
-            from PIL import Image, ImageTk, ImageFilter
+            _state["label"].destroy()
+        except Exception:
+            pass
+    _state["label"]     = None
+    _state["image_ref"] = None
 
-            chat = _get_chat_widget(root)
-            if not chat:
-                return
 
-            _remove_canvas()
-            mode   = _bg_state["mode"]
-            canvas = _make_canvas(root, chat, mode)
-            _bg_state["_canvas"] = canvas
-            _bg_state["_root"]   = root
-            _bg_state["_stop"]   = False
+def _apply_background(path: str, opacity: int, blur: bool):
+    """Create and place the background label behind the chat widget."""
+    root = _state["root"]
+    if not root:
+        return False
 
-            cap = cv2.VideoCapture(path)
-            fps = min(_bg_state["fps_limit"],
-                      cap.get(cv2.CAP_PROP_FPS) or 24)
-            delay = int(1000 / fps)
+    try:
+        # Find chat widget
+        chat, container = _find_chat_container(root)
+        if not chat:
+            return False
 
-            def _next_frame():
-                if _bg_state["_stop"]:
-                    cap.release()
+        _state["chat_widget"] = chat
+
+        # Get dimensions
+        root.update_idletasks()
+        w = chat.winfo_width()  or 600
+        h = chat.winfo_height() or 400
+
+        # Load image
+        frames = _load_image(path, w, h, opacity, blur)
+        if not frames:
+            return False
+
+        _clear_background()
+
+        # Create label in the SAME parent as the chat widget
+        # place() it at chat's position so it sits exactly behind it
+        parent = chat.master
+        lbl = tk.Label(parent, borderwidth=0, highlightthickness=0)
+        lbl.image = frames[0]
+        lbl.config(image=frames[0])
+
+        # Place at same position as chat widget
+        x = chat.winfo_x()
+        y = chat.winfo_y()
+        lbl.place(x=x, y=y, width=w, height=h)
+
+        # Push label behind chat widget
+        lbl.lower(chat)
+
+        _state["label"]      = lbl
+        _state["image_ref"]  = frames[0]
+        _state["image_path"] = path
+
+        # Reposition if chat resizes
+        def _reposition(event=None):
+            try:
+                if not _state["label"]:
                     return
+                nw = chat.winfo_width()
+                nh = chat.winfo_height()
+                nx = chat.winfo_x()
+                ny = chat.winfo_y()
+                if nw > 10 and nh > 10:
+                    # Reload image at new size
+                    new_frames = _load_image(path, nw, nh, opacity, blur)
+                    if new_frames:
+                        _state["label"].config(image=new_frames[0])
+                        _state["label"].image = new_frames[0]
+                        _state["image_ref"]   = new_frames[0]
+                        if len(new_frames) > 1:
+                            _state["gif_frames"] = new_frames
+                    _state["label"].place(x=nx, y=ny, width=nw, height=nh)
+                    _state["label"].lower(chat)
+            except Exception:
+                pass
+
+        chat.bind("<Configure>", _reposition)
+        root.after(500, _reposition)
+
+        # GIF animation
+        if len(frames) > 1:
+            _state["gif_frames"] = frames
+
+            def _animate(idx=0):
                 try:
-                    ret, frame = cap.read()
-                    if not ret:
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                        ret, frame = cap.read()
-                    if ret:
-                        w = canvas.winfo_width()  or 800
-                        h = canvas.winfo_height() or 600
-                        frame = cv2.resize(frame, (w, h))
-                        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
-                        img = Image.fromarray(frame)
-                        if _bg_state["blur"]:
-                            img = img.filter(ImageFilter.GaussianBlur(
-                                radius=_bg_state["blur_radius"]))
-                        # Apply opacity
-                        r, g, b, a = img.split()
-                        a = a.point(lambda p: int(p * _bg_state["opacity"] / 100))
-                        img.putalpha(a)
-                        photo = ImageTk.PhotoImage(img)
-                        canvas.delete("all")
-                        canvas.create_image(0, 0, anchor=tk.NW, image=photo)
-                        canvas._photo_ref = photo
+                    if not _state["label"] or not _state["gif_frames"]:
+                        return
+                    frame = _state["gif_frames"][idx % len(_state["gif_frames"])]
+                    _state["label"].config(image=frame)
+                    _state["label"].image = frame
+                    _state["gif_job"] = root.after(
+                        80, lambda: _animate(idx + 1))
                 except Exception:
                     pass
-                root.after(delay, _next_frame)
 
-            root.after(100, _next_frame)
-            _bg_state["active"] = True
+            _animate()
 
-        except ImportError:
-            root.after(0, lambda: _show_error(
-                "opencv-python is required for video backgrounds.\n"
-                "Install it with: pip install opencv-python"))
-        except Exception as e:
-            root.after(0, lambda: _show_error(f"Video error: {e}"))
+        return True
 
-    root.after(0, _do)
+    except Exception as e:
+        print(f"[background_media] error: {e}")
+        return False
 
 
-def _remove_canvas():
-    """Remove the current background canvas."""
-    try:
-        _bg_state["_stop"] = True
-        if _bg_state["_canvas"]:
-            _bg_state["_canvas"].destroy()
-            _bg_state["_canvas"] = None
-        _bg_state["active"] = False
-    except Exception:
-        pass
+def _extract_path(user_input: str) -> str:
+    """Extract file path from user input."""
+    import re
+    text = user_input.strip()
+    # Remove trigger phrases
+    for prefix in ["set background ", "background image ", "change background "]:
+        if text.lower().startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+    # Strip quotes
+    text = text.strip('"\'')
+    return text
 
 
-def _show_error(msg: str):
-    try:
-        import tkinter as tk
-        from tkinter import messagebox
-        root = _get_root()
-        if root:
-            messagebox.showerror("Background Error", msg, parent=root)
-    except Exception:
-        pass
+# ── Lifecycle ─────────────────────────────────────────────────────────────────
 
-
-def _browse_file(context: dict) -> str:
-    """Open file dialog to pick background."""
+def on_startup(context: dict):
     try:
         import tkinter as tk
-        from tkinter import filedialog
-        root = _get_root()
-        path = filedialog.askopenfilename(
-            title="Select Background",
-            filetypes=[
-                ("Images & Videos", "*.jpg *.jpeg *.png *.gif *.mp4 *.avi *.mkv *.webm"),
-                ("Images", "*.jpg *.jpeg *.png *.gif"),
-                ("Videos", "*.mp4 *.avi *.mkv *.webm"),
-                ("All files", "*.*"),
-            ],
-            parent=root)
-        return path or ""
-    except Exception:
-        return ""
+        _state["root"] = tk._default_root
+
+        # Register skin rebuild hook
+        context["shared_state"]["on_gui_rebuild"] = lambda: (
+            _reapply() if _state["image_path"] else None)
+
+    except Exception as e:
+        print(f"[background_media] startup error: {e}")
 
 
-def _register_hooks(context: dict):
-    """Register plugin hooks via shared_state so gui.py can call us generically."""
-    shared = context.get("shared_state")
-    if shared is not None:
-        shared["on_gui_rebuild"] = _apply_current
+def _reapply():
+    """Reapply background after skin/GUI rebuild."""
+    if _state["image_path"]:
+        _state["root"].after(500, lambda: _apply_background(
+            _state["image_path"],
+            _state["opacity"],
+            False))
 
+
+def on_shutdown(context: dict):
+    _clear_background()
+
+
+# ── Run ───────────────────────────────────────────────────────────────────────
 
 def run(query: str, context: dict) -> str:
-    # Register hooks on every call so we're always wired up
-    _register_hooks(context)
-
     text = context["user_input"].lower().strip()
 
-    # Remove background
-    if any(t in text for t in ["background off", "remove background",
-                                "no background", "clear background"]):
-        _remove_canvas()
-        if context.get("shared_state") is not None:
-            context["shared_state"]["background.active"] = False
+    # Clear
+    if "clear" in text or "remove" in text:
+        root = _state["root"] or tk._default_root
+        if root:
+            root.after(0, _clear_background)
         return "Background removed."
 
     # Opacity
-    import re
-    op_match = re.search(r"opacity\s+(\d+)", text)
-    if op_match:
-        val = max(5, min(95, int(op_match.group(1))))
-        _bg_state["opacity"] = val
-        if _bg_state["active"] and _bg_state["path"]:
-            _apply_current()
-        return f"Background opacity set to {val}%."
+    if "opacity" in text:
+        import re
+        m = re.search(r"(\d+)", text)
+        if m:
+            pct = max(5, min(100, int(m.group(1))))
+            _state["opacity"] = pct
+            if _state["image_path"]:
+                root = _state["root"]
+                if root:
+                    root.after(0, lambda: _apply_background(
+                        _state["image_path"], pct, False))
+            return f"Background opacity set to {pct}%."
+        return "Please specify opacity 0-100. Example: background opacity 40"
 
-    # Mode
-    if "background mode chat" in text or "behind chat" in text:
-        _bg_state["mode"] = "chat"
-        if _bg_state["active"] and _bg_state["path"]:
-            _apply_current()
-        return "Background mode set to chat area only."
+    # Set background
+    path_str = _extract_path(context["user_input"])
+    if not path_str:
+        return ("Please provide an image path.\n"
+                "Example: set background C:\\Users\\me\\wallpaper.jpg")
 
-    if "background mode window" in text or "behind window" in text or "entire window" in text:
-        _bg_state["mode"] = "window"
-        if _bg_state["active"] and _bg_state["path"]:
-            _apply_current()
-        return "Background mode set to entire window."
+    path = Path(path_str)
+    if not path.exists():
+        return f"File not found: {path_str}"
 
-    # Settings
-    if "background settings" in text or "background info" in text:
-        return (
-            f"Background settings:\n"
-            f"  Active: {'Yes' if _bg_state['active'] else 'No'}\n"
-            f"  File: {_bg_state['path'] or 'None'}\n"
-            f"  Mode: {_bg_state['mode']}\n"
-            f"  Opacity: {_bg_state['opacity']}%\n"
-            f"  Blur: {'On' if _bg_state['blur'] else 'Off'}\n"
-            f"  FPS limit: {_bg_state['fps_limit']}"
-        )
+    if path.suffix.lower() not in {".png",".jpg",".jpeg",".gif",".webp",".bmp"}:
+        return "Unsupported format. Use PNG, JPG, GIF, or WebP."
 
-    # Set background — open file picker
-    if any(t in text for t in ["set background", "background image",
-                                "background video", "live wallpaper",
-                                "set wallpaper"]):
-        path = _browse_file(context)
-        if not path:
-            return "No file selected."
+    opacity = _state.get("opacity", 40)
+    root    = _state["root"] or tk._default_root
+    if not root:
+        return "Could not access GUI."
 
-        _bg_state["path"] = path
-        ext = Path(path).suffix.lower()
+    _state["root"]    = root
+    _state["opacity"] = opacity
 
-        if ext in (".mp4", ".avi", ".mkv", ".webm", ".mov"):
-            _show_video(path)
-            return (f"Video background set: {Path(path).name}\n"
-                    f"Mode: {_bg_state['mode']} | "
-                    f"Opacity: {_bg_state['opacity']}%\n"
-                    f"Tip: 'background opacity 60' to adjust transparency.")
-        else:
-            _show_static(path)
-            return (f"Background set: {Path(path).name}\n"
-                    f"Mode: {_bg_state['mode']} | "
-                    f"Opacity: {_bg_state['opacity']}%\n"
-                    f"Tip: 'background mode window' to extend to full window.")
+    def _do():
+        ok = _apply_background(path_str, opacity, False)
+        return ok
 
-    return ""
-
-
-def _apply_current():
-    """Re-apply current background after settings change."""
-    if not _bg_state["path"]:
-        return
-    _remove_canvas()
-    ext = Path(_bg_state["path"]).suffix.lower()
-    if ext in (".mp4", ".avi", ".mkv", ".webm", ".mov"):
-        _show_video(_bg_state["path"])
-    else:
-        _show_static(_bg_state["path"])
+    root.after(100, _do)
+    return f"Background set to: {path.name}"
