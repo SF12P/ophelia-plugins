@@ -45,16 +45,23 @@ def _get_memory_dir(context: dict) -> Path:
     return Path(context.get("memory_dir", "trm_memory"))
 
 
+_memory_cache = {"data": [], "time": 0}
+
 def _load_all_memories(mem_dir: Path) -> list:
-    """Load all memories from ChromaDB via the store module."""
+    """Load memories from ChromaDB — cached for 60 seconds to avoid slow repeated queries."""
+    import time
+    now = time.time()
+    if _memory_cache["data"] and now - _memory_cache["time"] < 60:
+        return _memory_cache["data"]
     try:
         import sys
         sys.path.insert(0, str(mem_dir.parent))
         from memory.store import MemoryStore
         from utils.config import Config
         store = MemoryStore(Config())
-        # Search with broad query to get many memories
-        results = store.search("user life interests preferences", top_k=50)
+        results = store.search("user life interests preferences", top_k=30)
+        _memory_cache["data"] = results
+        _memory_cache["time"] = now
         return results
     except Exception:
         return []
