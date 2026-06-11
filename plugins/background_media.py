@@ -16,9 +16,9 @@ import tkinter as tk
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.6"
+VERSION     = "1.6.1"
 DESCRIPTION = "Set a static image or animated GIF as Ophelia's background."
-MANUAL_ONLY = False
+MANUAL_ONLY = True
 AUTHOR      = "SF12P"
 TAGS        = ["appearance", "background", "media"]
 REQUIRES    = ["Pillow"]
@@ -138,44 +138,77 @@ def _clear_background():
     _state["label"]     = None
     _state["image_ref"] = None
 
+    # Restore chat widget background color
+    if _state.get("chat_widget"):
+        try:
+            _state["chat_widget"].config(bg="#0a0a0f")
+        except Exception:
+            pass
+
 
 def _apply_background(path: str, opacity: int, blur: bool):
-    """Create and place the background label inside the chat Text widget."""
+    """Set image as background of the chat Text widget using bg image trick."""
     root = _state["root"]
     if not root:
         return False
 
     try:
-        # Find chat widget
         chat, container = _find_chat_container(root)
         if not chat:
             return False
 
         _state["chat_widget"] = chat
-
-        # Get dimensions
         root.update_idletasks()
+
         w = chat.winfo_width()  or 600
         h = chat.winfo_height() or 400
 
-        # Load image
         frames = _load_image(path, w, h, opacity, blur)
         if not frames:
             return False
 
         _clear_background()
 
-        # Place the label INSIDE the chat Text widget using place()
-        # This is the only reliable way — the label sits inside the text
-        # widget's own coordinate space, always visible, never clipped
-        lbl = tk.Label(chat, borderwidth=0, highlightthickness=0)
+        # Use a Label placed in the chat widget's PARENT with place(),
+        # positioned exactly over the chat widget, then use tag_configure
+        # on the Text widget to make its background transparent-ish by
+        # matching the label's position perfectly.
+        # Most reliable cross-version approach: place label in same parent,
+        # set chat bg to "" won't work, so instead we use the Text widget's
+        # own -background option with a PhotoImage via a Canvas embedded
+        # as the first character in the Text widget.
+        parent = chat.master
+        lbl = tk.Label(parent, borderwidth=0, highlightthickness=0,
+                       image=frames[0])
         lbl.image = frames[0]
-        lbl.config(image=frames[0])
-        lbl.place(x=0, y=0, width=w, height=h)
 
-        # Lower inside the Text widget so text renders on top
+        # Get chat position relative to its parent
+        x = chat.winfo_x()
+        y = chat.winfo_y()
+        lbl.place(x=x, y=y, width=w, height=h)
+
+        # Lower label to bottom of stacking order in parent
+        lbl.lower()
+        # Then lift chat widget above the label
+        chat.lift(lbl)
+        # Also lift any scrollbars/frames that sit alongside chat
         try:
-            lbl.lower()
+            for sib in parent.winfo_children():
+                if sib is not lbl:
+                    try: sib.lift(lbl)
+                    except Exception: pass
+        except Exception:
+            pass
+
+        # Make chat background transparent so label shows through
+        try:
+            chat.config(bg="")
+        except Exception:
+            pass
+        # If that fails, set to a very dark near-transparent color
+        # that blends with the image
+        try:
+            chat.config(background="#00000001")
         except Exception:
             pass
 
@@ -183,13 +216,14 @@ def _apply_background(path: str, opacity: int, blur: bool):
         _state["image_ref"]  = frames[0]
         _state["image_path"] = path
 
-        # Reposition if chat resizes
         def _reposition(event=None):
             try:
                 if not _state["label"]:
                     return
                 nw = chat.winfo_width()
                 nh = chat.winfo_height()
+                nx = chat.winfo_x()
+                ny = chat.winfo_y()
                 if nw > 10 and nh > 10:
                     new_frames = _load_image(path, nw, nh, opacity, blur)
                     if new_frames:
@@ -198,11 +232,9 @@ def _apply_background(path: str, opacity: int, blur: bool):
                         _state["image_ref"]   = new_frames[0]
                         if len(new_frames) > 1:
                             _state["gif_frames"] = new_frames
-                    _state["label"].place(x=0, y=0, width=nw, height=nh)
-                    try:
-                        _state["label"].lower()
-                    except Exception:
-                        pass
+                    _state["label"].place(x=nx, y=ny, width=nw, height=nh)
+                    _state["label"].lower()
+                    chat.lift(_state["label"])
             except Exception:
                 pass
 
