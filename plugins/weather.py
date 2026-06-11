@@ -37,5 +37,8 @@ def run(query: str, context: dict) -> str:
         if resp.status_code == 200:
             return f"Weather for {location}: {resp.text.strip()}"
         return f"Could not get weather for {location}"
-    except Exception as e:
-        return f"Weather lookup failed: {e}"
+    except Exception:
+        return (
+            f"I can't check the weather right now — no internet connection or the "
+            f"weather service is unavailable. Try again when you're online."
+        )
