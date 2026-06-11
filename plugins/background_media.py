@@ -16,7 +16,7 @@ import tkinter as tk
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.5"
+VERSION     = "1.6"
 DESCRIPTION = "Set a static image or animated GIF as Ophelia's background."
 MANUAL_ONLY = False
 AUTHOR      = "SF12P"
@@ -26,10 +26,11 @@ REQUIRES    = ["Pillow"]
 TRIGGERS = [
     "set background", "clear background", "remove background",
     "background image", "background opacity", "change background",
+    "add background", "background",
 ]
 
 COMMANDS = {
-    "set background <path>":      "Set an image as chat background",
+    "set background":             "Open file picker to choose a background image",
     "clear background":           "Remove the background image",
     "background opacity <0-100>": "Adjust background opacity",
 }
@@ -233,20 +234,6 @@ def _apply_background(path: str, opacity: int, blur: bool):
         return False
 
 
-def _extract_path(user_input: str) -> str:
-    """Extract file path from user input."""
-    import re
-    text = user_input.strip()
-    # Remove trigger phrases
-    for prefix in ["set background ", "background image ", "change background "]:
-        if text.lower().startswith(prefix):
-            text = text[len(prefix):].strip()
-            break
-    # Strip quotes
-    text = text.strip('"\'')
-    return text
-
-
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 def on_startup(context: dict):
@@ -302,30 +289,35 @@ def run(query: str, context: dict) -> str:
             return f"Background opacity set to {pct}%."
         return "Please specify opacity 0-100. Example: background opacity 40"
 
-    # Set background
-    path_str = _extract_path(context["user_input"])
-    if not path_str:
-        return ("Please provide an image path.\n"
-                "Example: set background C:\\Users\\me\\wallpaper.jpg")
-
-    path = Path(path_str)
-    if not path.exists():
-        return f"File not found: {path_str}"
-
-    if path.suffix.lower() not in {".png",".jpg",".jpeg",".gif",".webp",".bmp"}:
-        return "Unsupported format. Use PNG, JPG, GIF, or WebP."
-
-    opacity = _state.get("opacity", 40)
-    root    = _state["root"] or tk._default_root
+    # Set background — open file picker directly, no path needed in chat
+    root = _state["root"] or tk._default_root
     if not root:
         return "Could not access GUI."
 
-    _state["root"]    = root
+    _state["root"] = root
+    opacity = _state.get("opacity", 40)
     _state["opacity"] = opacity
 
-    def _do():
-        ok = _apply_background(path_str, opacity, False)
-        return ok
+    result_holder = {"msg": "No file selected."}
 
-    root.after(100, _do)
-    return f"Background set to: {path.name}"
+    def _pick_and_apply():
+        try:
+            from tkinter import filedialog
+            path_str = filedialog.askopenfilename(
+                title="Choose background image",
+                filetypes=[
+                    ("Image files", "*.png *.jpg *.jpeg *.gif *.webp *.bmp"),
+                    ("All files", "*.*"),
+                ])
+            if not path_str:
+                result_holder["msg"] = "No file selected."
+                return
+            ok = _apply_background(path_str, opacity, False)
+            result_holder["msg"] = (
+                f"Background set to: {Path(path_str).name}"
+                if ok else "Could not apply background.")
+        except Exception as e:
+            result_holder["msg"] = f"Error: {e}"
+
+    root.after(0, _pick_and_apply)
+    return "Opening file picker — choose an image to use as background."
