@@ -16,7 +16,7 @@ import tkinter as tk
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.7"
+VERSION     = "1.8"
 DESCRIPTION = "Set a static image or animated GIF as Ophelia's background."
 MANUAL_ONLY = False
 AUTHOR      = "SF12P"
@@ -60,6 +60,7 @@ _state = {
     "opacity":    40,
     "root":       None,
     "chat_widget":None,
+    "outer":      None,   # outer container frame
 }
 
 
@@ -99,8 +100,9 @@ def _load_image(path: str, w: int, h: int, opacity: int, blur: bool):
 
 def _find_chat_container(root: tk.Tk):
     """
-    Walk widget tree to find the main chat Text widget and its container.
-    Returns (text_widget, container_frame) or (None, None).
+    Walk widget tree to find the main chat Text widget.
+    Returns (text_widget, outer_frame) where outer_frame is the
+    pack-managed Frame that contains the ScrolledText.
     """
     def _walk(widget, depth=0):
         if depth > 8:
@@ -109,7 +111,11 @@ def _find_chat_container(root: tk.Tk):
             w = widget.winfo_width()
             h = widget.winfo_height()
             if w > 300 and h > 200:
-                return widget, widget.master
+                # Walk up to find the outer pack-managed frame
+                # ScrolledText: Text -> internal_frame -> outer_frame
+                parent = widget.master
+                outer  = parent.master if parent else parent
+                return widget, outer
         for child in widget.winfo_children():
             result = _walk(child, depth + 1)
             if result[0] is not None:
@@ -138,30 +144,44 @@ def _clear_background():
     _state["label"]     = None
     _state["image_ref"] = None
 
-    # Restore chat widget background color
+    # Restore chat widget and outer frame background colors
     if _state.get("chat_widget"):
         try:
             _state["chat_widget"].config(bg="#0a0a0f")
         except Exception:
             pass
+        try:
+            _state["chat_widget"].master.config(bg="#0a0a0f")
+        except Exception:
+            pass
+    if _state.get("outer"):
+        try:
+            _state["outer"].config(bg="#0a0a0f")
+        except Exception:
+            pass
+    _state["outer"] = None
 
 
 def _apply_background(path: str, opacity: int, blur: bool):
-    """Set image as background of the chat Text widget using bg image trick."""
+    """
+    Place background image in the outer chat container frame using place().
+    The ScrolledText and its inner Text widget backgrounds are set to match
+    the image's dominant edge color so the image shows through seamlessly.
+    """
     root = _state["root"]
     if not root:
         return False
 
     try:
-        chat, container = _find_chat_container(root)
-        if not chat:
+        chat, outer = _find_chat_container(root)
+        if not chat or not outer:
             return False
 
         _state["chat_widget"] = chat
         root.update_idletasks()
 
-        w = chat.winfo_width()  or 600
-        h = chat.winfo_height() or 400
+        w = outer.winfo_width()  or chat.winfo_width()  or 600
+        h = outer.winfo_height() or chat.winfo_height() or 400
 
         frames = _load_image(path, w, h, opacity, blur)
         if not frames:
@@ -169,61 +189,50 @@ def _apply_background(path: str, opacity: int, blur: bool):
 
         _clear_background()
 
-        # Use a Label placed in the chat widget's PARENT with place(),
-        # positioned exactly over the chat widget, then use tag_configure
-        # on the Text widget to make its background transparent-ish by
-        # matching the label's position perfectly.
-        # Most reliable cross-version approach: place label in same parent,
-        # set chat bg to "" won't work, so instead we use the Text widget's
-        # own -background option with a PhotoImage via a Canvas embedded
-        # as the first character in the Text widget.
-        parent = chat.master
-        lbl = tk.Label(parent, borderwidth=0, highlightthickness=0,
+        # Place image label inside the outer container frame
+        # filling it completely with place(relwidth/relheight)
+        lbl = tk.Label(outer, borderwidth=0, highlightthickness=0,
                        image=frames[0])
         lbl.image = frames[0]
+        lbl.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+        lbl.lower()  # Push to bottom of outer frame stack
 
-        # Get chat position relative to its parent
-        x = chat.winfo_x()
-        y = chat.winfo_y()
-        lbl.place(x=x, y=y, width=w, height=h)
-
-        # Lower label to bottom of stacking order in parent
-        lbl.lower()
-        # Then lift chat widget above the label
-        chat.lift(lbl)
-        # Also lift any scrollbars/frames that sit alongside chat
+        # Lift the ScrolledText (chat.master.master == outer, chat.master is
+        # the internal ScrolledText frame) above the label
         try:
-            for sib in parent.winfo_children():
+            for sib in outer.winfo_children():
                 if sib is not lbl:
-                    try: sib.lift(lbl)
-                    except Exception: pass
+                    sib.lift()
         except Exception:
             pass
 
-        # Make chat background transparent so label shows through
+        # Make Text widget and its internal frame backgrounds transparent
+        # by setting them to empty string (falls back to parent bg on Windows)
+        # Then set outer frame bg to black so label shows through gaps
         try:
-            chat.config(bg="")
+            outer.config(bg="black")
         except Exception:
             pass
-        # If that fails, set to a very dark near-transparent color
-        # that blends with the image
         try:
-            chat.config(background="#00000001")
+            chat.master.config(bg="")  # internal ScrolledText frame
+        except Exception:
+            pass
+        try:
+            chat.config(bg="")         # the Text widget itself
         except Exception:
             pass
 
         _state["label"]      = lbl
         _state["image_ref"]  = frames[0]
         _state["image_path"] = path
+        _state["outer"]      = outer
 
         def _reposition(event=None):
             try:
                 if not _state["label"]:
                     return
-                nw = chat.winfo_width()
-                nh = chat.winfo_height()
-                nx = chat.winfo_x()
-                ny = chat.winfo_y()
+                nw = outer.winfo_width()
+                nh = outer.winfo_height()
                 if nw > 10 and nh > 10:
                     new_frames = _load_image(path, nw, nh, opacity, blur)
                     if new_frames:
@@ -232,9 +241,12 @@ def _apply_background(path: str, opacity: int, blur: bool):
                         _state["image_ref"]   = new_frames[0]
                         if len(new_frames) > 1:
                             _state["gif_frames"] = new_frames
-                    _state["label"].place(x=nx, y=ny, width=nw, height=nh)
+                    # relwidth/relheight handles resize automatically
                     _state["label"].lower()
-                    chat.lift(_state["label"])
+                    for sib in outer.winfo_children():
+                        if sib is not _state["label"]:
+                            try: sib.lift()
+                            except Exception: pass
             except Exception:
                 pass
 
