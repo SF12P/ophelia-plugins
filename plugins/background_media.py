@@ -16,7 +16,7 @@ import tkinter as tk
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.3"
+VERSION     = "1.4"
 DESCRIPTION = "Set a static image or animated GIF as Ophelia's background."
 MANUAL_ONLY = False
 AUTHOR      = "SF12P"
@@ -176,8 +176,14 @@ def _apply_background(path: str, opacity: int, blur: bool):
         y = chat.winfo_y()
         lbl.place(x=x, y=y, width=w, height=h)
 
-        # Push label behind chat widget
-        lbl.lower(chat)
+        # Stack: lift all existing siblings above the background label
+        # Never call lbl.lower(chat) — fails when parent hierarchy mismatches
+        try:
+            for sibling in parent.winfo_children():
+                if sibling is not lbl:
+                    sibling.lift()
+        except Exception:
+            pass
 
         _state["label"]      = lbl
         _state["image_ref"]  = frames[0]
@@ -202,7 +208,13 @@ def _apply_background(path: str, opacity: int, blur: bool):
                         if len(new_frames) > 1:
                             _state["gif_frames"] = new_frames
                     _state["label"].place(x=nx, y=ny, width=nw, height=nh)
-                    _state["label"].lower(chat)
+                    # Re-lift siblings after resize
+                    try:
+                        for sibling in parent.winfo_children():
+                            if sibling is not _state["label"]:
+                                sibling.lift()
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
