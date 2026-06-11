@@ -16,7 +16,7 @@ import tkinter as tk
 from pathlib import Path
 
 NAME        = "background_media"
-VERSION     = "1.7"
+VERSION     = "1.6.1"
 DESCRIPTION = "Set a static image or animated GIF as Ophelia's background."
 MANUAL_ONLY = True
 AUTHOR      = "SF12P"
