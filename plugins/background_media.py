@@ -18,7 +18,7 @@ from pathlib import Path
 NAME        = "background_media"
 VERSION     = "1.7"
 DESCRIPTION = "Set a static image or animated GIF as Ophelia's background."
-MANUAL_ONLY = True
+MANUAL_ONLY = False
 AUTHOR      = "SF12P"
 TAGS        = ["appearance", "background", "media"]
 REQUIRES    = ["Pillow"]
@@ -26,7 +26,7 @@ REQUIRES    = ["Pillow"]
 TRIGGERS = [
     "set background", "clear background", "remove background",
     "background image", "background opacity", "change background",
-    "add background", "background",
+    "add background",
 ]
 
 COMMANDS = {
@@ -304,7 +304,7 @@ def run(query: str, context: dict) -> str:
         root = _state["root"] or tk._default_root
         if root:
             root.after(0, _clear_background)
-        return "Background removed."
+        return "\x00DIRECT\x00Background removed."
 
     # Opacity
     if "opacity" in text:
@@ -318,13 +318,13 @@ def run(query: str, context: dict) -> str:
                 if root:
                     root.after(0, lambda: _apply_background(
                         _state["image_path"], pct, False))
-            return f"Background opacity set to {pct}%."
-        return "Please specify opacity 0-100. Example: background opacity 40"
+            return f"\x00DIRECT\x00Background opacity set to {pct}%."
+        return "\x00DIRECT\x00Please specify opacity 0-100. Example: background opacity 40"
 
     # Set background — open file picker directly, no path needed in chat
     root = _state["root"] or tk._default_root
     if not root:
-        return "Could not access GUI."
+        return "\x00DIRECT\x00Could not access GUI."
 
     _state["root"] = root
     opacity = _state.get("opacity", 40)
@@ -352,4 +352,4 @@ def run(query: str, context: dict) -> str:
             result_holder["msg"] = f"Error: {e}"
 
     root.after(0, _pick_and_apply)
-    return "Opening file picker — choose an image to use as background."
+    return "\x00DIRECT\x00Opening file picker — choose an image to use as background."
