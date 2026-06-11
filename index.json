@@ -1,23 +1,22 @@
 {
   "version": "1.0",
-  "updated": "2026-06-06",
+  "updated": "2026-06-11",
   "plugins": [
     {
       "name": "background_media",
       "display_name": "Background Media",
-      "description": "Set a static image or animated video as Ophelia's background.",
+      "description": "Set a static image or animated GIF as Ophelia's background.",
       "author": "SF12P",
-      "version": "1.2",
+      "version": "1.3",
       "tags": [
         "appearance",
-        "customization",
+        "background",
         "media"
       ],
       "file": "background_media.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/background_media.py",
       "requires": [
-        "Pillow",
-        "opencv-python"
+        "Pillow"
       ]
     },
     {
