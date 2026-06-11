@@ -4,7 +4,7 @@ from pathlib import Path
 
 NAME        = "notes"
 TRIGGERS    = ["make a note", "note that", "remember that", "save this",
-               "add a note", "show my notes", "list notes", "read my notes"]
+               "add a note", "search notes", "find note", "show my notes", "list notes", "read my notes"]
 DESCRIPTION = "Save and retrieve quick notes"
 MANUAL_ONLY = False
 AUTHOR    = "SF12P"
@@ -35,6 +35,21 @@ def _save(context: dict, notes: list):
 
 def run(query: str, context: dict) -> str:
     text = context["user_input"].lower()
+
+    # Search notes
+    if any(kw in text for kw in ["search notes", "find note", "find in notes", "search my notes"]):
+        import re as _re
+        q = _re.sub(r"search notes?|find note|find in notes?|search my notes", "", text).strip()
+        if not q:
+            return "What would you like to search for in your notes?"
+        notes = _load(context)
+        matches = [n for n in notes if q in n["text"].lower()]
+        if not matches:
+            return f"No notes found matching '{q}'."
+        lines_out = [f"Found {len(matches)} note(s) matching '{q}':"]
+        for n in matches[:5]:
+            lines_out.append(f"  [{n['time']}] {n['text'][:100]}")
+        return "\n".join(lines_out)
 
     # Read notes
     if any(kw in text for kw in ["show", "list", "read", "what are my notes"]):
