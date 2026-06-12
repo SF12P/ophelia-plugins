@@ -1,24 +1,7 @@
 {
   "version": "1.0",
-  "updated": "2026-06-11",
+  "updated": "2026-06-12",
   "plugins": [
-    {
-      "name": "background_media",
-      "display_name": "Background Media",
-      "description": "Set a static image or animated GIF as Ophelia's background.",
-      "author": "SF12P",
-      "version": "1.8",
-      "tags": [
-        "appearance",
-        "background",
-        "media"
-      ],
-      "file": "background_media.py",
-      "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/background_media.py",
-      "requires": [
-        "Pillow"
-      ]
-    },
     {
       "name": "calculator",
       "display_name": "Calculator",
