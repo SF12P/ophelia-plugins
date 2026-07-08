@@ -95,7 +95,7 @@
       "display_name": "Image Gen",
       "description": "Local AI image generation using Stable Diffusion. Fully self-contained.",
       "author": "SF12P",
-      "version": "1.2",
+      "version": "1.4",
       "tags": [],
       "file": "image_gen.py",
       "url": "https://raw.githubusercontent.com/SF12P/ophelia-plugins/main/plugins/image_gen.py",
