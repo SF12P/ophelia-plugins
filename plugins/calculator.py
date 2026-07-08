@@ -21,6 +21,17 @@ def run(query: str, context: dict) -> str:
     expr = re.sub(r'\s+', ' ', expr).strip()
     if not expr or len(expr) < 2:
         return ""
+    # Guard against runaway expressions (e.g. 9**9**9) that can hang
+    # or exhaust memory: cap length, allow a single exponentiation,
+    # and require its exponent to be a small plain integer.
+    if len(expr) > 80:
+        return ""
+    if "**" in expr:
+        if expr.count("**") > 1:
+            return ""
+        m = re.search(r'\*\*\s*(\d{1,4})(?![\d.(])', expr)
+        if not m or int(m.group(1)) > 1000:
+            return ""
     try:
         # Safe eval with math functions only
         allowed = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
