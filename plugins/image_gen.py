@@ -13,7 +13,7 @@ Chat commands (type in chat):
   image popup off     — show images inline in chat (default)
   image model <id>    — switch to a different HuggingFace model
   image steps <n>     — set inference steps (default 20, more = slower but better)
-  image size <n>      — set output size in pixels (512 or 768)
+  image size <n>      — set output size in pixels (512, 768 or 1024)
   image settings      — show current settings
   image clear cache   — delete downloaded model to free disk space
 
@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 
 NAME        = "image_gen"
-VERSION     = "1.2"
+VERSION     = "1.4"
 DESCRIPTION = "Local AI image generation using Stable Diffusion. Fully self-contained."
 MANUAL_ONLY = False
 
@@ -49,6 +49,8 @@ DEFAULT_MODEL = "stabilityai/sdxl-turbo"
 # Available models with descriptions
 MODEL_OPTIONS = {
     "stabilityai/sdxl-turbo":          "SDXL Turbo (fast, great quality, recommended)",
+    "stabilityai/stable-diffusion-xl-base-1.0":
+                                        "SDXL Base 1.0 (highest quality, slower, ~7GB, best at 1024px)",
     "Lykon/dreamshaper-xl-turbo":       "Dreamshaper XL (artistic, vivid, great for characters)",
     "OFA-Sys/small-stable-diffusion-v0":"Small SD (lightweight, weaker quality)",
 }
@@ -67,7 +69,7 @@ SETTINGS = {
     "image_gen_size": {
         "label":   "Output size (pixels)",
         "type":    "choice",
-        "choices": ["512", "768"],
+        "choices": ["512", "768", "1024"],
         "default": "512",
     },
     "image_gen_model": {
@@ -75,6 +77,7 @@ SETTINGS = {
         "type":    "choice",
         "choices": [
             "stabilityai/sdxl-turbo",
+            "stabilityai/stable-diffusion-xl-base-1.0",
             "Lykon/dreamshaper-xl-turbo",
             "OFA-Sys/small-stable-diffusion-v0",
         ],
@@ -88,7 +91,7 @@ COMMANDS = {
     "image popup on":       "Show generated images in a separate popup window",
     "image popup off":      "Show generated images inline in chat (default)",
     "image steps <n>":      "Set inference steps — higher = better quality but slower (default 20)",
-    "image size <n>":       "Set output size in pixels — 512 or 768 (default 512)",
+    "image size <n>":       "Set output size in pixels — 512, 768 or 1024 (default 512)",
     "image model <id>":     "Switch to a different HuggingFace model ID",
     "image settings":       "Show current image generation settings",
     "image clear cache":    "Delete the downloaded model to free disk space",
@@ -125,23 +128,51 @@ def _set_pref(key: str, value):
 # ── Prompt extraction ─────────────────────────────────────────────────
 
 def _extract_prompt(user_input: str) -> str:
+    """
+    Pull the image DESCRIPTION out of a conversational message.
+    "hello Luna, can you make an image of an anime girl, white hair"
+    must become "an anime girl, white hair" — greetings and courtesy
+    words poison Stable Diffusion prompts and produce mush.
+    """
     text = user_input.strip()
-    patterns = [
-        r"generate an image of\s+", r"generate image of\s+",
-        r"generate an image\s+",    r"create an image of\s+",
-        r"create image of\s+",      r"create an image\s+",
-        r"draw me an?\s+",          r"draw me\s+",
-        r"draw an?\s+",             r"make an image of\s+",
-        r"make a picture of\s+",    r"show me an image of\s+",
-        r"paint an?\s+",            r"imagine an?\s+",
-        r"render an?\s+",           r"picture of\s+",
-        r"image of\s+",
+
+    # 1. If a trigger phrase is present, keep only what comes AFTER it
+    triggers = [
+        r"generate an image of", r"generate image of", r"generate an image",
+        r"create an image of",   r"create image of",   r"create an image",
+        r"make an image of",     r"make a picture of", r"make an image",
+        r"show me an image of",  r"draw me an?", r"draw me", r"draw an?",
+        r"paint an?", r"imagine an?", r"render an?",
+        r"picture of", r"image of",
     ]
-    for pat in patterns:
-        cleaned = re.sub(pat, "", text, flags=re.IGNORECASE).strip()
-        if cleaned and cleaned != text:
-            return cleaned
-    return text
+    for pat in triggers:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            after = text[m.end():].strip(" ,.:;-")
+            if len(after) >= 3:
+                text = after
+                break
+
+    # 2. Strip leading greetings / courtesy filler that survived
+    #    ("hello Luna, can you ...", "hey please ...", "could you ...")
+    filler = re.compile(
+        r"^(?:(?:hello|hey|hi|yo|okay|ok)\b[\w\s]{0,20}?[,!.]\s*)?"   # "hello Luna,"
+        r"(?:(?:can|could|will|would)\s+you\s+)?"                      # "can you"
+        r"(?:please\s+)?(?:make|create|generate|draw|render|do)?\s*"   # "please make"
+        r"(?:me\s+)?(?:an?\s+)?(?:image|picture|photo|drawing)?\s*"    # "me an image"
+        r"(?:of\s+)?",
+        flags=re.IGNORECASE)
+    cleaned = filler.sub("", text, count=1).strip(" ,.:;-")
+    return cleaned if len(cleaned) >= 3 else text
+
+
+# Negative prompt applied to non-turbo models — the single biggest
+# quality lever for SD 1.5-class models
+NEGATIVE_PROMPT = (
+    "blurry, low quality, worst quality, deformed, distorted, disfigured, "
+    "bad anatomy, extra limbs, missing fingers, watermark, text, signature, "
+    "jpeg artifacts, out of focus"
+)
 
 
 # ── Settings commands ─────────────────────────────────────────────────
@@ -192,8 +223,8 @@ def _handle_settings_command(text: str) -> str | None:
     m = re.match(r"image size (\d+)", t)
     if m:
         size = int(m.group(1))
-        if size not in (512, 768):
-            return "Size must be 512 or 768."
+        if size not in (512, 768, 1024):
+            return "Size must be 512, 768 or 1024."
         _set_pref("image_gen_size", size)
         return f"Output size set to {size}x{size}px."
 
@@ -202,14 +233,7 @@ def _handle_settings_command(text: str) -> str | None:
         model_id = m.group(1).strip()
         _set_pref("image_gen_model", model_id)
         # Clear old cache so new model downloads fresh
-        try:
-            from utils.config import Config
-            import shutil
-            model_dir = Path(Config().memory_dir) / "image_gen_model"
-            if model_dir.exists():
-                shutil.rmtree(model_dir)
-        except Exception:
-            pass
+        _clear_model_cache()
         return (
             f"Model set to: {model_id}\n"
             f"Old cache cleared. Next generation will download the new model."
@@ -232,17 +256,46 @@ def _is_cached() -> bool:
     return (_get_model_dir() / "model_index.json").exists()
 
 
+def _cached_model_id() -> str:
+    """Which model the cache directory actually contains ("" if unknown)."""
+    try:
+        marker = _get_model_dir() / "cached_model.txt"
+        if marker.exists():
+            return marker.read_text(encoding="utf-8").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _mark_cached_model(model_id: str):
+    try:
+        (_get_model_dir() / "cached_model.txt").write_text(
+            model_id, encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _clear_model_cache():
+    try:
+        import shutil
+        model_dir = _get_model_dir()
+        if model_dir.exists():
+            shutil.rmtree(model_dir)
+    except Exception:
+        pass
+
+
 def _download_model(model_id: str, on_status) -> bool:
     try:
-        from diffusers import StableDiffusionPipeline
         import torch
         model_dir = _get_model_dir()
         model_dir.mkdir(parents=True, exist_ok=True)
         on_status(
             f"Downloading image model: {model_id}\n"
-            f"This only happens once (~1.7GB). Please wait..."
+            f"This only happens once per model. Please wait..."
         )
-        model_id = prefs.get("model", DEFAULT_MODEL)
+        # (v1.3 fix: this used to reference an undefined 'prefs' variable,
+        # crashing every fresh download with a NameError)
         PipeClass = _get_pipeline_class(model_id)
         pipe = PipeClass.from_pretrained(
             model_id,
@@ -251,6 +304,13 @@ def _download_model(model_id: str, on_status) -> bool:
             requires_safety_checker=False,
         )
         pipe.save_pretrained(str(model_dir))
+        # v1.4 fix: record WHICH model this cache holds. Previously the
+        # cache was anonymous, so switching models in the Plugin Manager
+        # UI (which doesn't clear the cache like the chat command does)
+        # kept silently loading the old model — with the NEW model's
+        # turbo/guidance settings applied to it. That mismatch is what
+        # produced the broken generations users reported after v1.3.
+        _mark_cached_model(model_id)
         on_status("Model downloaded and cached.")
         return True
     except Exception as e:
@@ -271,14 +331,24 @@ def _get_pipeline_class(model_id: str):
 
 
 def _load_pipeline(prefs: dict):
-    from diffusers import StableDiffusionPipeline
     import torch
     model_dir = _get_model_dir()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype  = torch.float16 if torch.cuda.is_available() else torch.float32
-    pipe = StableDiffusionPipeline.from_pretrained(
-        str(model_dir), torch_dtype=dtype,
-        safety_checker=None, requires_safety_checker=False)
+    # v1.3 fix: this always used StableDiffusionPipeline (SD 1.5 class)
+    # even for SDXL models — the wrong pipeline for the default
+    # sdxl-turbo cache and a direct cause of garbled/blurry output.
+    # AutoPipeline reads model_index.json and picks the right class.
+    try:
+        from diffusers import AutoPipelineForText2Image
+        pipe = AutoPipelineForText2Image.from_pretrained(
+            str(model_dir), torch_dtype=dtype,
+            safety_checker=None, requires_safety_checker=False)
+    except Exception:
+        from diffusers import StableDiffusionPipeline
+        pipe = StableDiffusionPipeline.from_pretrained(
+            str(model_dir), torch_dtype=dtype,
+            safety_checker=None, requires_safety_checker=False)
     pipe = pipe.to(device)
     try:
         pipe.enable_attention_slicing()
@@ -294,12 +364,16 @@ def _generate(pipe, prompt: str, prefs: dict):
     size = prefs["size"]
     model_id = prefs.get("model", DEFAULT_MODEL)
     is_turbo = "turbo" in model_id.lower() or "sdxl-turbo" in model_id.lower()
-    return pipe(
-        prompt,
+    kwargs = dict(
         num_inference_steps=prefs["steps"] if not is_turbo else min(prefs["steps"], 4),
         height=size, width=size,
         guidance_scale=0.0 if is_turbo else 7.5,
-    ).images[0]
+    )
+    # Turbo models ignore negative prompts (guidance 0); everything
+    # else benefits enormously from one
+    if not is_turbo:
+        kwargs["negative_prompt"] = NEGATIVE_PROMPT
+    return pipe(prompt, **kwargs).images[0]
 
 
 def _save_image(image) -> Path:
@@ -396,7 +470,10 @@ def _open_viewer(image_path: Path):
     except Exception:
         try:
             import subprocess
-            subprocess.run(["start", "", str(image_path)], shell=True)
+            # No shell=True — with it, a crafted filename could be
+            # interpreted as shell syntax. List args are passed verbatim.
+            subprocess.run(["cmd", "/c", "start", "", str(image_path)],
+                           creationflags=subprocess.CREATE_NO_WINDOW)
         except Exception:
             pass
 
@@ -448,6 +525,21 @@ def run(query: str, context: dict) -> str:
 
     def _run_async():
         try:
+            # v1.4 fix: make sure the cache holds the model the user
+            # actually selected. The Plugin Manager UI changes the pref
+            # without clearing the cache, so re-download on mismatch.
+            cached = _cached_model_id()
+            if _is_cached() and cached and cached != prefs["model"]:
+                _chat_status(
+                    f"Model changed ({cached} -> {prefs['model']}) — "
+                    f"clearing old cache...")
+                _clear_model_cache()
+            elif _is_cached() and not cached:
+                # Legacy cache from pre-1.4 with no marker. The chat
+                # command always cleared the cache on switch, so assume
+                # it matches the current pref and tag it.
+                _mark_cached_model(prefs["model"])
+
             if not _is_cached():
                 ok = _download_model(prefs["model"], _chat_status)
                 if not ok:
